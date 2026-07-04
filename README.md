@@ -1,93 +1,108 @@
-# Console Bugs
+# Console Bugs — Web Security Auditor v2.0
 
-> A comprehensive PowerShell security scanner for Windows environments. Automates vulnerability detection, system hardening, and security auditing — all from a single script.
+> **A comprehensive 14-phase whitehat vulnerability scanner for web applications. PowerShell-based, no dependencies, one-command execution.**
 
----
-
-## Overview
-
-Console Bugs is a powerful Windows security assessment tool written in PowerShell. It performs deep system scans to identify misconfigurations, vulnerabilities, and security gaps across your Windows environment.
+[![PowerShell](https://img.shields.io/badge/PowerShell-5.1%2B-5391FE?logo=powershell&logoColor=white)](https://learn.microsoft.com/en-us/powershell/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ---
 
-## Features
+## 🧠 Deep Analysis
 
-- 🔍 **System Vulnerability Scanning** — Detects known Windows security weaknesses
-- 🛡️ **Hardening Checks** — Identifies missing security configurations and best practices
-- 📊 **Audit Reporting** — Generates detailed security audit reports
-- ⚡ **One-Command Execution** — Single PowerShell script, no dependencies
-- 🔐 **Privilege Escalation Detection** — Checks for potential privilege escalation paths
-- 🖥️ **Windows-Specific** — Optimized for Windows Server and Desktop environments
+Console Bugs is NOT just a simple scanner — it's a **14-phase security audit pipeline** built entirely in PowerShell. Each phase builds on the previous one, creating a comprehensive security posture assessment:
+
+| Phase | Module | What It Checks |
+|-------|--------|----------------|
+| 1 | **DNS Recon** | DNS records, IP resolution, ping reachability, HTTP→HTTPS redirect |
+| 2 | **SSL/TLS** | Certificate expiry, issuer validation, SSL connection health |
+| 3 | **Security Headers** | HSTS, X-Frame-Options, CSP, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, cookie flags (HttpOnly/Secure/SameSite) |
+| 4 | **Attack Surface** | Server header disclosure, X-Powered-By, technology fingerprinting |
+| 5 | **Port Scan** | Common ports (22, 80, 443, 3306, 3389, 8080, 8443) via async TCP |
+| 6 | **Injection Testing** | SQLi, XSS, command injection payload reflection checks |
+| 7 | **CORS Audit** | CORS headers, origin reflection, wildcard origins |
+| 8 | **Info Leakage** | Directory listing, backup files, .git exposure, debug endpoints |
+| 9 | **Tech Fingerprinting** | Server headers, cookie patterns, response signatures |
+| 10 | **Email Discovery** | Common email pattern detection in page content |
+| 11 | **HTTP Methods** | OPTIONS, PUT, DELETE, TRACE, CONNECT, PATCH method audit |
+| 12 | **DNS Records** | MX, SPF, DMARC, DKIM, NS, TXT record enumeration |
+| 13 | **Clickjacking** | X-Frame-Options validation, framebreaker detection |
+| 14 | **Open Redirect** | Open redirect vulnerability detection |
 
 ---
 
-## Quick Start
-
-### Prerequisites
-- Windows PowerShell 5.1+ or PowerShell 7+
-- Administrator privileges recommended
-
-### Run
+## ⚡ One Command
 
 ```powershell
-# Run the scanner
-.\security-scanner.ps1
-
-# Or with execution policy bypass
-powershell -ExecutionPolicy Bypass -File .\security-scanner.ps1
+.\security-scanner.ps1 -Url "https://example.com"
 ```
 
----
-
-## What It Checks
-
-- 🔓 Open ports and services
-- 👤 User account vulnerabilities
-- 🛡️ Windows Defender / antivirus status
-- 🔐 Registry security settings
-- 📁 File permission issues
-- 🌐 Network configuration weaknesses
-- 🔄 Pending security updates
-- 📝 Event log analysis
+No modules to install. No dependencies. Just run.
 
 ---
 
-## Output
+## 📊 Scoring System
 
-The script outputs:
-- Color-coded console results (pass/warn/fail)
-- Detailed findings for each security check
-- Remediation recommendations
-- Summary score
+Each check is scored as:
+- **PASS** ✅ — Secure configuration
+- **WARN** ⚠️ — Security improvement available
+- **FAIL** ❌ — Vulnerability detected
+- **INFO** ℹ️ — Informational only
 
----
-
-## Use Cases
-
-- **Security Auditors** — Quick Windows environment assessment
-- **Sysadmins** — Automated hardening validation
-- **Pen-testers** — Initial reconnaissance and vulnerability identification
-- **DevOps** — CI/CD security gate for Windows build agents
+At the end, a summary score (X/100) and remediation guide is generated.
 
 ---
 
-## Example
+## 🔧 Full Parameters
 
 ```powershell
-PS C:\> .\security-scanner.ps1
+.\security-scanner.ps1 -Url "https://example.com" [-PortScan] [-MethodsScan]
+```
 
-[+] Scanning Windows Security Configuration...
-[✓] Windows Defender: Running
-[✗] Firewall: Inbound rules too permissive
-[!] SMBv1: Enabled (vulnerable)
-[✓] UAC: Enabled
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `-Url` | String (Required) | — | Target URL to scan |
+| `-PortScan` | Switch | `$true` | Enable/disable port scanning phase |
+| `-MethodsScan` | Switch | `$true` | Enable/disable HTTP methods audit |
+
+---
+
+## 📋 Example Output
+
+```
+    +------------------------------------------+
+    |   WEB SECURITY AUDITOR v2.0              |
+    |   Ultra Whitehat Vulnerability Scanner    |
+    +------------------------------------------+
+
+ Target : https://example.com
+ Started: 2026-07-04 12:00:00
+
+═══════════════════════════════════════════════════
+ PHASE 1 - DNS & Network Reconnaissance
+═══════════════════════════════════════════════════
+ [PASS] DNS Resolution                        1 records: 93.184.216.34
+ [INFO] Reachability (Ping)                   ICMP blocked (common)
+ [PASS] HTTP->HTTPS Redirect                  Redirects (301)
 ...
-
-Scan Complete — Score: 72/100 (Needs Improvement)
 ```
 
 ---
 
-## License
+## 💡 Use Cases
+
+- **🔍 Bug Bounty Recon** — Initial target assessment
+- **🛡️ Security Audits** — Compliance and hardening checks
+- **⚡ CI/CD Pipeline** — Security gate for deployments
+- **📝 Penetration Testing** — Automated information gathering
+
+---
+
+## ⚠️ Legal
+
+For authorized security testing only. Unauthorized use may be illegal.
+
+---
+
+## 📄 License
 
 MIT

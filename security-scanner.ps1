@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Web Security Auditor v2.0 - Whitehat Vulnerability Scanner
 .DESCRIPTION
@@ -559,7 +559,7 @@ if ($MethodsScan) {
     $supported = @()
     foreach ($m in $methods) {
         $code = Test-HttpMethod -Url $Url -Method $m
-        if ($code -ne $null -and $code -ne 405 -and $code -ne 403 -and $code -ne 501 -and $code -ne 502) {
+        if ($code -ne $null -and $code -ne 400 -and $code -ne 405 -and $code -ne 403 -and $code -ne 501 -and $code -ne 502) {
             $supported += "$m (HTTP $code)"
         }
     }
@@ -676,12 +676,10 @@ Write-Host ("="*55) -ForegroundColor DarkGray
 $redirectPayloads = @(
     "//evil.com",
     "https://evil.com",
-    "http://evil.com",
-    "//evil.com%2F%2F",
-    "/%5cevil.com",
-    "//evil.com@good.com"
+    "/%5cevil.com"
 )
 $foundRedirect = $false
+[System.Net.ServicePointManager]::DefaultConnectionLimit = 10
 foreach ($rp in $redirectPayloads) {
     try {
         $ru = "$base`?redirect=$([System.Net.WebUtility]::UrlEncode($rp))"
@@ -689,9 +687,9 @@ foreach ($rp in $redirectPayloads) {
         $ru3 = "$base`?next=$([System.Net.WebUtility]::UrlEncode($rp))"
 
         foreach ($testUrl in @($ru, $ru2, $ru3)) {
-            $rrq = [System.Net.WebRequest]::Create($testUrl); $rrq.Timeout = 8000
+            $rrq = [System.Net.WebRequest]::Create($testUrl); $rrq.Timeout = 2000
             $rrq.AllowAutoRedirect = $false; $rrq.UserAgent = "WebSecAuditor/2.0"
-            $rrs = $rrq.GetResponse()
+            try { $rrs = $rrq.GetResponse() } catch { $rrq.Abort(); continue }
             [int]$rrc = $rrs.StatusCode
             $loc = $rrs.Headers["Location"]
             $rrs.Close()
@@ -756,57 +754,262 @@ $ts = Get-Date -Format "yyyyMMdd_HHmmss"
 $sf = $Domain -replace '[^a-zA-Z0-9]', '_'
 $rp = Join-Path $PSScriptRoot "report_${sf}_${ts}.html"
 
+$reportDate = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+$reportId = "RPT-" + (Get-Date -Format "yyyyMMdd") + "-" + ($sf.Substring(0, [Math]::Min(8, $sf.Length))).ToUpper()
+
 $html = @"
-<!DOCTYPE html><html lang="en"><head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Security Audit Report - $Domain</title>
 <style>
-body{font-family:'Segoe UI',Tahoma,sans-serif;background:#0d1117;color:#c9d1d9;padding:40px}
-.container{max-width:1000px;margin:auto}
-h1{color:#58a6ff;font-size:28px}
-h2{color:#f0883e;font-size:18px;margin:25px 0 10px;border-bottom:1px solid #30363d;padding-bottom:5px}
-.meta{color:#8b949e;font-size:14px;margin-bottom:20px}
-.summary{display:flex;gap:15px;margin:20px 0;flex-wrap:wrap}
-.card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:18px 24px;min-width:120px;text-align:center}
-.card .num{font-size:32px;font-weight:bold}
-.card .label{font-size:13px;color:#8b949e;margin-top:4px}
-.critical{color:#f85149}.warning{color:#d29922}.pass{color:#3fb950}.info{color:#58a6ff}
-table{width:100%;border-collapse:collapse;margin:10px 0 20px}
-th{background:#21262d;color:#8b949e;text-align:left;padding:10px 12px;font-size:12px;text-transform:uppercase;border:1px solid #30363d}
-td{padding:10px 12px;border:1px solid #30363d;font-size:14px}
-tr:hover{background:#1c2128}
-.badge{display:inline-block;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600}
-.badge-fail{background:#3d1f1e;color:#f85149;border:1px solid #f85149}
-.badge-warn{background:#3d2e00;color:#d29922;border:1px solid #d29922}
-.badge-pass{background:#0d3a1e;color:#3fb950;border:1px solid #3fb950}
-.badge-info{background:#0d2b45;color:#58a6ff;border:1px solid #58a6ff}
-.rec{color:#d29922;font-size:13px;font-style:italic;margin-top:2px}
-.footer{margin-top:30px;text-align:center;color:#484f58;font-size:12px}
-</style></head><body><div class="container">
-<h1>Security Audit Report - v2.0</h1>
-<div class="meta">Target: <strong>$Domain</strong> | Date: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') | Duration: ${elapsed}s | 14 Phases</div>
-<div class="summary">
-<div class="card"><div class="num critical">$failed</div><div class="label">Vulnerabilities</div></div>
-<div class="card"><div class="num warning">$warns</div><div class="label">Warnings</div></div>
-<div class="card"><div class="num pass">$passed</div><div class="label">Passed</div></div>
-<div class="card"><div class="num info">$infos</div><div class="label">Info</div></div>
-<div class="card"><div class="num">$total</div><div class="label">Total Checks</div></div>
-</div>
-<h2>Detailed Results</h2>
-<table><tr><th style="width:100px">Status</th><th style="width:300px">Check</th><th>Detail</th></tr>
+  @page { size: A4; margin: 20mm; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-size: 10.5pt;
+    line-height: 1.6;
+    color: #1a1a1a;
+    background: #fff;
+    padding: 0;
+  }
+  .report {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 40px 50px;
+  }
+  .header {
+    border-bottom: 2px solid #000;
+    padding-bottom: 15px;
+    margin-bottom: 25px;
+  }
+  .header h1 {
+    font-size: 20pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 5px;
+    color: #111;
+  }
+  .header .subtitle {
+    font-size: 12pt;
+    color: #444;
+    font-weight: 400;
+  }
+  .meta-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 15px 0 25px;
+    font-size: 10pt;
+  }
+  .meta-table td {
+    padding: 4px 10px;
+    border: 1px solid #999;
+    vertical-align: top;
+  }
+  .meta-table td:first-child {
+    font-weight: 600;
+    width: 180px;
+    background: #f7f7f7;
+    color: #222;
+  }
+  h2 {
+    font-size: 12pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    border-bottom: 1.5px solid #333;
+    padding-bottom: 4px;
+    margin: 25px 0 12px;
+    letter-spacing: 0.5px;
+    color: #111;
+  }
+  h3 {
+    font-size: 11pt;
+    font-weight: 600;
+    margin: 15px 0 8px;
+    color: #222;
+  }
+  p, li {
+    font-size: 10.5pt;
+    margin-bottom: 6px;
+  }
+  ul { margin-left: 20px; }
+  table.results {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0 20px;
+    font-size: 10pt;
+  }
+  table.results th {
+    background: #f0f0f0;
+    font-weight: 600;
+    text-align: left;
+    padding: 7px 10px;
+    border: 1px solid #888;
+    font-size: 9.5pt;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    color: #333;
+  }
+  table.results td {
+    padding: 5px 8px;
+    border: 1px solid #999;
+    vertical-align: top;
+  }
+  table.results tr:nth-child(even) {
+    background: #fafafa;
+  }
+  .severity-critical { font-weight: bold; color: #c00; }
+  .severity-high { font-weight: bold; color: #d00; }
+  .severity-medium { font-weight: bold; color: #b60; }
+  .severity-low { font-weight: bold; color: #0070c0; }
+  .severity-info { color: #555; }
+  .rec {
+    font-size: 9.5pt;
+    color: #555;
+    font-style: italic;
+    margin-top: 2px;
+  }
+  .summary-box {
+    border: 1px solid #999;
+    padding: 12px 15px;
+    margin: 15px 0;
+    background: #fafafa;
+  }
+  .summary-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 3px 0;
+    font-size: 10.5pt;
+  }
+  .summary-row.total {
+    border-top: 1.5px solid #666;
+    margin-top: 5px;
+    padding-top: 5px;
+    font-weight: 700;
+    font-size: 11pt;
+  }
+  .footer {
+    margin-top: 30px;
+    padding-top: 10px;
+    border-top: 1px solid #999;
+    font-size: 9pt;
+    color: #666;
+    text-align: center;
+  }
+  .classification {
+    text-align: right;
+    font-size: 8.5pt;
+    color: #888;
+    margin-bottom: 10px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  @media print {
+    body { padding: 0; }
+    .report { padding: 0; }
+  }
+</style>
+</head>
+<body>
+<div class="report">
+  <div class="classification">CONFIDENTIAL - FOR AUTHORIZED PERSONNEL ONLY</div>
+  <div class="header">
+    <h1>Web Application Security Audit Report</h1>
+    <div class="subtitle">$Domain</div>
+  </div>
+
+  <table class="meta-table">
+    <tr><td>Report ID</td><td>$reportId</td></tr>
+    <tr><td>Date of Assessment</td><td>$reportDate</td></tr>
+    <tr><td>Target</td><td>$Domain</td></tr>
+    <tr><td>Assessment Type</td><td>Automated Security Scan (14-Phase)</td></tr>
+    <tr><td>Duration</td><td>${elapsed} seconds</td></tr>
+    <tr><td>Total Checks Performed</td><td>$total</td></tr>
+    <tr><td>Tool</td><td>Web Security Auditor v2.0</td></tr>
+  </table>
+
+  <h2>1. Executive Summary</h2>
+  <p>This report presents the findings of an automated security assessment conducted against <strong>$Domain</strong>. The assessment covered DNS configuration, SSL/TLS certificate validation, HTTP security headers, attack surface enumeration, port scanning, injection vulnerability detection, CORS configuration, information leakage, technology fingerprinting, email discovery, HTTP methods audit, DNS records, clickjacking protection, and open redirect testing.</p>
+
+  <div class="summary-box">
+    <div class="summary-row"><span>Critical Findings (FAIL)</span><span class="severity-critical">$failed</span></div>
+    <div class="summary-row"><span>Warnings (WARN)</span><span class="severity-medium">$warns</span></div>
+    <div class="summary-row"><span>Passed Checks</span><span>$passed</span></div>
+    <div class="summary-row"><span>Informational</span><span>$infos</span></div>
+    <div class="summary-row total"><span>Total Checks</span><span>$total</span></div>
+  </div>
+
+  <h2>2. Detailed Findings</h2>
+  <table class="results">
+    <tr><th style="width:70px">Severity</th><th style="width:250px">Check</th><th>Finding</th></tr>
 "@
 
 foreach ($r in $script:Results) {
-    $bc = switch($r.Status){"FAIL"{"badge-fail"}"WARN"{"badge-warn"}"PASS"{"badge-pass"}default{"badge-info"}}
+    $sevClass = switch($r.Status) {
+        "FAIL" { "severity-critical" }
+        "WARN" { "severity-medium" }
+        "PASS" { "" }
+        default { "severity-info" }
+    }
+    $sevLabel = switch($r.Status) {
+        "FAIL" { "Critical" }
+        "WARN" { "Warning" }
+        "PASS" { "Pass" }
+        default { "Info" }
+    }
     $ed = ($r.Detail -replace '&','&amp;' -replace '<','&lt;' -replace '>','&gt;')
-    $er = if($r.Recommendation){"<div class='rec'>[Tip] $($r.Recommendation -replace '&','&amp;' -replace '<','&lt;' -replace '>','&gt;')</div>"}else{""}
-    $html += "<tr><td><span class='badge $bc'>$($r.Status)</span></td><td>$($r.Check)</td><td>$ed $er</td></tr>`n"
+    $er = if($r.Recommendation){"<div class='rec'>Recommendation: $($r.Recommendation -replace '&','&amp;' -replace '<','&lt;' -replace '>','&gt;')</div>"}else{""}
+    $html += "    <tr><td class='$sevClass'>$sevLabel</td><td>$($r.Check)</td><td>$ed $er</td></tr>`n"
 }
 
 $html += @"
-</table>
-<div class="footer">Web Security Auditor v2.0 | 14 Phases | Whitehat Tool | For authorized testing only</div>
-</div></body></html>
+  </table>
+
+  <h2>3. Recommendations Summary</h2>
+  <ul>
+"@
+
+$recs = $script:Results | Where-Object { $_.Recommendation } | Select-Object -Unique
+foreach ($rec in $recs) {
+    $recText = ($rec.Recommendation -replace '&','&amp;' -replace '<','&lt;' -replace '>','&gt;')
+    $html += "    <li>$recText</li>`n"
+}
+
+$html += @"
+  </ul>
+
+  <h2>4. Methodology</h2>
+  <p>The assessment was performed using an automated 14-phase scanning methodology covering:</p>
+  <ul>
+    <li>Phase 1: DNS and Network Reconnaissance</li>
+    <li>Phase 2: SSL/TLS Certificate Validation</li>
+    <li>Phase 3: HTTP Security Headers Analysis</li>
+    <li>Phase 4: Attack Surface Enumeration (35+ sensitive paths)</li>
+    <li>Phase 5: Port Scanning (21 common ports)</li>
+    <li>Phase 6: Injection Vulnerability Reflection Testing</li>
+    <li>Phase 7: CORS Configuration Review</li>
+    <li>Phase 8: Information Leakage Assessment</li>
+    <li>Phase 9: Technology Fingerprinting</li>
+    <li>Phase 10: Email and Contact Discovery</li>
+    <li>Phase 11: HTTP Methods Audit</li>
+    <li>Phase 12: DNS Records Validation (SPF, DMARC)</li>
+    <li>Phase 13: Clickjacking Protection Testing</li>
+    <li>Phase 14: Open Redirect Testing</li>
+  </ul>
+  <p>This was an automated scan. Manual verification is recommended for all critical and warning findings before remediation.</p>
+
+  <h2>5. Disclaimer</h2>
+  <p>This assessment was conducted for authorized security testing purposes only. The findings reflect the state of the target at the time of scanning and may not account for recent changes. This report should not be used for unauthorized access or testing without explicit written permission from the target organization.</p>
+
+  <div class="footer">
+    Web Security Auditor v2.0 | Automated Security Assessment Report | Generated: $reportDate
+  </div>
+</div>
+</body>
+</html>
 "@
 
 $html | Out-File -FilePath $rp -Encoding utf8
